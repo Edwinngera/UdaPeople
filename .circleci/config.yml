@@ -1,5 +1,26 @@
 version: 2.1
 
+
+commands:
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    parameters:
+      workflow_id:
+        type: string
+    steps:
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+            if aws s3 ls | grep udapeople-<<parameters.workflow_id>>; then
+              aws s3 rm s3://udapeople-<<parameters.workflow_id>> --recursive
+            fi
+            aws cloudformation delete-stack --stack-name frontend-<<parameters.workflow_id>>
+            aws cloudformation delete-stack --stack-name backend-<<parameters.workflow_id>>
+      - revert-migrations:
+          workflow_id: <<parameters.workflow_id>>
+
+
 jobs:
   build-frontend:
     docker:
@@ -90,6 +111,52 @@ jobs:
             npm install
             npm audit fix --force
 
+  deploy-infrastructure:
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        - run:
+            name: Ensure back-end infrastructure exists
+            command: |
+              aws cloudformation deploy \
+                --template-file .circleci/files/backend.yml \
+                --tags project=udapeople-backend \
+                --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
+                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+              export BACKEND_URL=$(aws cloudformation describe-stacks \
+                --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
+                --query "Stacks[0].Outputs[?OutputKey=='BackendURL'].OutputValue" \
+                --no-paginate --output text)
+              echo $BACKEND_URL
+              curl -H "Content-Type: text/plain" -H "token: ${CIRCLE_WORKFLOW_ID}" \
+                --request PUT --data "${BACKEND_URL}" \
+                https://api.memstash.io/values/backendurl
+        - run:
+            name: Ensure front-end infrastructure exist
+            command: |
+              aws cloudformation deploy \
+                --template-file .circleci/files/frontend.yml \
+                --tags project=udapeople-frontend \
+                --stack-name frontend-"${CIRCLE_WORKFLOW_ID}" \
+                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+        - run:
+            name: Add back-end ip to ansible inventory
+            command: |
+              export BACKEND_URL=$(curl -H "token: ${CIRCLE_WORKFLOW_ID}" \
+                --request GET https://api.memstash.io/values/backendurl)
+              echo "${BACKEND_URL}" >> .circleci/ansible/inventory.txt
+              cat .circleci/ansible/inventory.txt
+        - run: yum -y install tar gzip
+        - persist_to_workspace:
+            root: .circleci/ansible
+            paths:
+              - inventory.txt
+        # This command has a when: on_fail
+        - destroy-environment:
+            workflow_id: "${CIRCLE_WORKFLOW_ID}"
+
+
             
 workflows:
   default:
@@ -104,4 +171,9 @@ workflows:
           requires: [build-backend]
       - scan-frontend:
           requires: [build-frontend]
+      - deploy-infrastructure:
+          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+          filters:
+            branches:
+              only: [main]
 

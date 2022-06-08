@@ -17,10 +17,7 @@ commands:
             fi
             aws cloudformation delete-stack --stack-name frontend-<<parameters.workflow_id>>
             aws cloudformation delete-stack --stack-name backend-<<parameters.workflow_id>>
-      - revert-migrations:
-          workflow_id: <<parameters.workflow_id>>
-
-
+     
 jobs:
   build-frontend:
     docker:

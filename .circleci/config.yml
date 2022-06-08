@@ -113,15 +113,7 @@ jobs:
         - image: amazon/aws-cli
       steps:
         - checkout
-        - run:
-            name: Ensure back-end infrastructure exists
-            command: |
-              aws cloudformation deploy \
-                --template-file .circleci/files/backend.yml \
-                --tags project=udapeople-backend \
-                --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
-                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
-              
+        
         - run:
             name: Ensure front-end infrastructure exist
             command: |
@@ -141,10 +133,24 @@ jobs:
              cat .circleci/ansible/inventory.txt
               
         - run: yum -y install tar gzip
+
+        
+        - run:
+            name: Ensure back-end infrastructure exists
+            command: |
+              aws cloudformation deploy \
+                --template-file .circleci/files/backend.yml \
+                --tags project=udapeople-backend \
+                --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
+                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+        
+
         - persist_to_workspace:
             root: .circleci/ansible
             paths:
               - inventory.txt
+
+        
         # This command has a when: on_fail
         - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"

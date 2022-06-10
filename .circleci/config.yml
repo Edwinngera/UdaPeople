@@ -179,25 +179,24 @@ jobs:
 
   run-migrations:
     docker:
-      - image: amazon/aws-cli
+      - image: circleci/node:13.8.0
     steps:
       - checkout
       - restore_cache:
           keys: [backend-build]
-      
+     
       - run:
           name: Install dependencies
           command: |
-              curl -sL https://rpm.nodesource.com/setup_12.x | bash -
-              yum -y install nodejs npm tar gzip jq git
+            sudo apt update
+            sudo apt install -y awscli
       - run:
           name: Run migrations
           command: |
-            cd backend
-            npm install
-            npm run migrations > migrations_dump.txt
-           
-           
+            npm i
+            npm run build
+            npm run migrations 2>&1 | tee migration-log.txt
+            
       - persist_to_workspace:
           root: ~/project
           paths:

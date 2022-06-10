@@ -1,5 +1,6 @@
 version: 2.1
 
+
 commands:
   destroy-environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
@@ -16,7 +17,7 @@ commands:
             fi
             aws cloudformation delete-stack --stack-name frontend-<<parameters.workflow_id>>
             aws cloudformation delete-stack --stack-name backend-<<parameters.workflow_id>>
-
+     
 jobs:
   build-frontend:
     docker:
@@ -79,7 +80,7 @@ jobs:
             cd backend
             npm install
             npm run test
-
+  
   scan-frontend:
     docker:
       - image: circleci/node:13.8.0
@@ -108,148 +109,105 @@ jobs:
             npm audit fix --force
 
   deploy-infrastructure:
-    docker:
-      - image: amazon/aws-cli
-    steps:
-      - checkout
+      docker:
+        - image: amazon/aws-cli
+      steps:
+        - checkout
+        
+        - run:
+            name: Ensure front-end infrastructure exist
+            command: |
+              aws cloudformation deploy \
+                --template-file .circleci/files/frontend.yml \
+                --tags project=udapeople-frontend \
+                --stack-name frontend-"${CIRCLE_WORKFLOW_ID}" \
+                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+        - run:
+            name: Add back-end ip to ansible inventory
+            command: |
+             BACKEND_IP=`aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --query "Reservations[*].Instances[*].[PublicDnsName]" \
+              --output text | tr -d '\n'`
+             echo $BACKEND_IP >> .circleci/ansible/inventory.txt
+             cat .circleci/ansible/inventory.txt
+              
+        - run: yum -y install tar gzip
 
-      - run:
-          name: Ensure front-end infrastructure exist
-          command: |
-            aws cloudformation deploy \
-              --template-file .circleci/files/frontend.yml \
-              --tags project=udapeople-frontend \
-              --stack-name frontend-"${CIRCLE_WORKFLOW_ID}" \
-              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
-      - run:
-          name: Add back-end ip to ansible inventory
-          command: |
-            BACKEND_IP=`aws ec2 describe-instances \
-             --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
-             --query "Reservations[*].Instances[*].[PublicDnsName]" \
-             --output text | tr -d '\n'`
-            echo $BACKEND_IP >> .circleci/ansible/inventory.txt
-            cat .circleci/ansible/inventory.txt
+        
+        - run:
+            name: Ensure back-end infrastructure exists
+            command: |
+              aws cloudformation deploy \
+                --template-file .circleci/files/backend.yml \
+                --tags project=udapeople-backend \
+                --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
+                --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+        
 
-      - run: yum -y install tar gzip
+        - persist_to_workspace:
+            root: .circleci/ansible
+            paths:
+              - inventory.txt
 
-      - run:
-          name: Ensure back-end infrastructure exists
-          command: |
-            aws cloudformation deploy \
-              --template-file .circleci/files/backend.yml \
-              --tags project=udapeople-backend \
-              --stack-name backend-"${CIRCLE_WORKFLOW_ID}" \
-              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID}"
+        
+        # This command has a when: on_fail
+        - destroy-environment:
+            workflow_id: "${CIRCLE_WORKFLOW_ID}"
 
-      - persist_to_workspace:
-          root: .circleci/ansible
-          paths:
-            - inventory.txt
-
-      # This command has a when: on_fail
-      - destroy-environment:
-          workflow_id: "${CIRCLE_WORKFLOW_ID}"
 
   configure-infrastructure:
+      docker:
+        - image: python:3.9.1-alpine3.12
+      steps:
+        - checkout
+        - add_ssh_keys:
+            fingerprints:
+              - "35:8c:e9:0b:d5:4f:61:2e:d2:f3:2f:7a:31:4f:13:38"
+        - attach_workspace:
+            at: /tmp/.circleci/ansible
+        - run:
+            name: Install dependencies
+            command: |
+              apk add --update ansible aws-cli
+        - run:
+            name: Configure server
+            command: |
+              ansible-playbook -i /tmp/.circleci/ansible/inventory.txt .circleci/ansible/configure-server.yml
+        - destroy-environment:
+            workflow_id: "${CIRCLE_WORKFLOW_ID}"
+
+  run-migrations:
     docker:
-      - image: python:3.9.1-alpine3.12
+      - image: circleci/node:13.8.0
     steps:
       - checkout
-      - add_ssh_keys:
-          fingerprints:
-            - "35:8c:e9:0b:d5:4f:61:2e:d2:f3:2f:7a:31:4f:13:38"
-      - attach_workspace:
-          at: /tmp/.circleci/ansible
+      - restore_cache:
+          keys: [backend-build]
+     
       - run:
           name: Install dependencies
           command: |
-            apk add --update ansible aws-cli
+            sudo apt update
+            sudo apt install -y awscli
       - run:
-          name: Configure server
+          name: Run migrations
           command: |
-            ansible-playbook -i /tmp/.circleci/ansible/inventory.txt .circleci/ansible/configure-server.yml
+          
+            npm i
+            npm run build
+            npm run migrations 2>&1 | tee migration-log.txt
+            
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - backend
+
       - destroy-environment:
           workflow_id: "${CIRCLE_WORKFLOW_ID}"
 
-  # run-migrations:
-  #   docker:
-  #     - image: circleci/node:13.8.0
-  #   steps:
-  #     - checkout
-  #     - restore_cache:
-  #         keys: [backend-build]
-  #     - run:
-  #         name: prepare environment for backend build
-  #         command: |
-  #           cat \<< EOF > backend/.env
-  #           ENVIRONMENT=production
-  #           VERSION=1
-  #           TYPEORM_CONNECTION=postgres
-  #           TYPEORM_MIGRATIONS_DIR=./src/migrations
-  #           TYPEORM_ENTITIES=./src/modules/domain/**/*.entity.ts
-  #           TYPEORM_MIGRATIONS=./src/migrations/*.ts
-  #           TYPEORM_HOST=${TYPEORM_HOST}
-  #           TYPEORM_PORT=${TYPEORM_PORT}
-  #           TYPEORM_USERNAME=${TYPEORM_USERNAME}
-  #           TYPEORM_PASSWORD=${TYPEORM_PASSWORD}
-  #           TYPEORM_DATABASE=${TYPEORM_DATABASE}
-  #           EOF
-  #     - run:
-  #         name: Install dependencies
-  #         command: |
-  #           sudo apt update
-  #           sudo apt install -y awscli
-  #     - run:
-  #         name: Run migrations
-  #         command: |
-  #           cd backend
-  #           cat .env
-  #           npm i
-  #           npm run build
-  #           npm run migrations 2>&1 | tee migration-log.txt
-           
-  #     - persist_to_workspace:
-  #         root: ~/project
-  #         paths:
-  #           - backend
 
-  #     - destroy-environment:
-  #         workflow_id: "${CIRCLE_WORKFLOW_ID}"
-
-
-    run-migrations:
-      docker:
-        - image: circleci/node:13.8.0
-      steps:
-        - checkout
-        - restore_cache:
-            keys:
-              - build-backend
-        - run:
-            name: Run migrations
-            command: |
-              cd backend
-              cat .env
-              npm i
-              npm run build
-              npm run migrations > migrations_dump.txt
-              cat migrations_dump.txt
-              
-        - run:
-            name: Sending migration status to kvdb
-            command: |
-              if grep -q "has been executed successfully"  ./backend/migrations_dump.txt   
-              then
-                curl https://kvdb.io/LHFkzdfqGQiT5AocazCCLL//migration_${CIRCLE_WORKFLOW_ID:0:7} \
-                  -H "X-Api-Key: ${THISDB_API_KEY}" \
-                  -d "1"
-              else
-                curl https://kvdb.io/LHFkzdfqGQiT5AocazCCLL//migration_${CIRCLE_WORKFLOW_ID:0:7} \
-                  -H "X-Api-Key: ${THISDB_API_KEY}" \
-                  -d "0"
-              fi
-
+            
 workflows:
   default:
     jobs:

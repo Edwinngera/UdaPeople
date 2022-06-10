@@ -179,10 +179,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          keys: [backend-build-cache]
-      - attach_workspace:
-          at: .
-      - create-dotenv-file
+          keys: [backend-build]
       - run:
           name: Run database migration
           command: |

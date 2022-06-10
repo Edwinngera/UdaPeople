@@ -193,9 +193,7 @@ jobs:
       - run:
           name: Run migrations
           command: |
-            npm i
-            npm run build
-            npm run migrations 2>&1 | tee migration-log.txt
+           
             
       - persist_to_workspace:
           root: ~/project

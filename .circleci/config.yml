@@ -333,7 +333,6 @@ jobs:
       - run:
           name: Backend smoke test
           command: |
-             # Fetch and prepare the BACKEND_IP env var
               BACKEND_IP=$(aws cloudformation describe-stacks --stack-name backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
               export API_URL="http://${BACKEND_IP}:3030"
               echo "${API_URL}"

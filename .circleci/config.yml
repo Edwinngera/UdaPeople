@@ -2,6 +2,27 @@ version: 2.1
 
 
 commands:
+  revert-migrations:
+    description: Revert the last migration
+    parameters:
+        workflow_id:
+            type: string      
+    steps:
+        - run:
+            name: Revert migrations
+            when: on_fail
+            command: |
+                SUCCESS=$(curl --insecure  https://kvdb.io/9GE4jRtKznmVKRfvdBABBe/migration_<< parameters.workflow_id >>)
+                # Logic for reverting the database state
+                if (( $SUCCESS == 1 ));
+                then
+                    cd ~/project/backend
+                    npm install
+                    npm run migration:revert
+                fi  
+       
+
+
   destroy-environment:
     description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
     parameters:
@@ -17,6 +38,9 @@ commands:
             fi
             aws cloudformation delete-stack --stack-name frontend-<<parameters.workflow_id>>
             aws cloudformation delete-stack --stack-name backend-<<parameters.workflow_id>>
+
+      - revert-migrations:
+           workflow_id: <<parameters.workflow_id>>
      
 jobs:
   build-frontend:
@@ -258,6 +282,9 @@ jobs:
           # Here's where you will add some code to rollback on failure  
         - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
+        - revert-migrations:
+           workflow_id: <<parameters.workflow_id>>
+     
 
   #Deploy Backend
 
@@ -290,6 +317,9 @@ jobs:
 
         - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
+        - revert-migrations:
+           workflow_id: <<parameters.workflow_id>>
+     
 
 
  #Smoke test backend
@@ -309,6 +339,7 @@ jobs:
           name: Backend smoke test
           command: |
              # Fetch and prepare the BACKEND_IP env var
+              #BACKEND_IP=$(aws cloudformation describe-stacks --stack-name backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
               BACKEND_IP=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].PublicIpAddress' --output text)
               export API_URL="http://${BACKEND_IP}:3030"
               echo "${API_URL}"
@@ -320,6 +351,9 @@ jobs:
               fi
       - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
+      - revert-migrations:
+           workflow_id: <<parameters.workflow_id>>
+     
 
 #Smoke test front end
   smoke-test-frontend:

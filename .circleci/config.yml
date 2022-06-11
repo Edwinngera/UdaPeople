@@ -321,8 +321,15 @@ jobs:
         - image: cimg/base:stable
       steps:
         - checkout
-        - install_awscli
-        - install_nodejs
+        - attach_workspace:
+            at: ~/
+
+        - run:
+            name: Install dependencies
+            command: |
+              apk add --update curl
+              pip install awscli
+        
         - run:
             name: Backend smoke test.
             command: |

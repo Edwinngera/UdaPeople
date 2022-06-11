@@ -282,9 +282,7 @@ jobs:
           # Here's where you will add some code to rollback on failure  
         - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
-        - revert-migrations:
-           workflow_id: <<parameters.workflow_id>>
-     
+        
 
   #Deploy Backend
 
@@ -317,9 +315,6 @@ jobs:
 
         - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
-        - revert-migrations:
-           workflow_id: <<parameters.workflow_id>>
-     
 
 
  #Smoke test backend
@@ -339,8 +334,7 @@ jobs:
           name: Backend smoke test
           command: |
              # Fetch and prepare the BACKEND_IP env var
-              #BACKEND_IP=$(aws cloudformation describe-stacks --stack-name backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
-              BACKEND_IP=$(aws ec2 describe-instances --query 'Reservations[*].Instances[*].PublicIpAddress' --output text)
+              BACKEND_IP=$(aws cloudformation describe-stacks --stack-name backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
               export API_URL="http://${BACKEND_IP}:3030"
               echo "${API_URL}"
               if curl "${API_URL}/api/status" | grep "ok"
@@ -351,9 +345,6 @@ jobs:
               fi
       - destroy-environment:
             workflow_id: "${CIRCLE_WORKFLOW_ID}"
-      - revert-migrations:
-           workflow_id: <<parameters.workflow_id>>
-     
 
 #Smoke test front end
   smoke-test-frontend:
@@ -375,7 +366,7 @@ jobs:
             echo ${URL} 
             if curl -s ${URL} | grep "Welcome"
             then
-              return  1
+              return  0
             else
               return 1
             fi    

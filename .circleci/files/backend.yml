@@ -36,7 +36,4 @@ Resources:
         - Key: Name
           Value: !Sub backend-${ID}
 
-  Outputs:
-   PublicIp:
-    Description: Server Public IP
-    Value: !GetAtt Server.PublicIp
+ 

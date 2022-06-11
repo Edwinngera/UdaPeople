@@ -239,11 +239,12 @@ jobs:
         - run:
             name: Get backend url
             command: |
-              # your code here
+
               BACKEND_IP=$(aws cloudformation describe-stacks --stack-name backend-"${CIRCLE_WORKFLOW_ID:0:7}" --query "Stacks[0].Outputs[0].OutputValue" --output text)
-              API_URL="http://${BACKEND_IP}:3030"
-              echo "API_URL=${API_URL}" >> frontend/.env
-              car frontend/.env
+              export API_URL="http://${BACKEND_IP}:3030"
+              echo "API_URL = ${API_URL}"
+              echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+              cat frontend/.env
         - run:
             name: Deploy frontend objects
             working_directory: ./frontend

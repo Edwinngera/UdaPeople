@@ -157,6 +157,7 @@ jobs:
               --filters "Name=tag:Name,Values=backend-${CIRCLE_WORKFLOW_ID:0:7}" \
               --query "Reservations[*].Instances[*].[PublicDnsName]" \
               --output text | tr -d '\n'`
+            
              echo $BACKEND_IP >> .circleci/ansible/inventory.txt
              cat .circleci/ansible/inventory.txt
               
